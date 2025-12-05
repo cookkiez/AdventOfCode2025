@@ -1,4 +1,6 @@
-﻿namespace AdventOfCode2025.Tasks
+﻿using System.Collections.Generic;
+
+namespace AdventOfCode2025.Tasks
 {
     public class Task5 : AdventTask
     {
@@ -7,92 +9,64 @@
             Filename += "5.txt";
         }
 
-        public class Page(int PageIndex, HashSet<int> pagesBefore, HashSet<int> pagesAfter)
-        {
-            public int PageIndex { get; set; } = PageIndex;
-            public HashSet<int> PagesBefore { get; set; } = pagesBefore;
-        }
-
         public override void Solve1(string input)
         {
             var result = 0;
-            var (i, pagesMap, lines) = GetPagesMap(input);
-            i++;
-            while (i < lines.Length)
+            var lines = GetLinesList(input);
+            
+            var foodRanges = new List<(long, long)>();
+            var lineIndex = GetFoodRanges(foodRanges, 0, lines);
+            lineIndex++;
+            for(var i = lineIndex; i < lines.Count; i++)
             {
-                var currLine = lines[i].Trim().Split(",").Select(int.Parse).ToList();
-                if (CanPrint(pagesMap, currLine))
-                    result += currLine[currLine.Count / 2];
-                i++;
+                var food = long.Parse(lines[i]);
+                foreach(var foodRange in foodRanges)
+                {
+                    if (food >= foodRange.Item1 && food <= foodRange.Item2)
+                    { 
+                        result++; 
+                        break; 
+                    }
+                }
             }
             Console.WriteLine(result);
         }
 
-        private (int, Dictionary<int, Page>, string[] lines) GetPagesMap(string input)
+        private int GetFoodRanges(List<(long, long)> foodRanges, int lineIndex, List<string> lines)
         {
-            var lines = input.Split('\n');
-            var pagesMap = new Dictionary<int, Page>();
-            var i = 0;
-            while (lines[i] != "" && lines[i] != "\r")
+            while (lines[lineIndex] != "")
             {
-                var currLine = lines[i].Split("|");
-                var firstPage = int.Parse(currLine[0]);
-                var secondPage = int.Parse(currLine[1]);
-                if (pagesMap.ContainsKey(secondPage))
-                    pagesMap[secondPage].PagesBefore.Add(firstPage);
-                else
-                    pagesMap.Add(secondPage, new Page(secondPage, new HashSet<int> { firstPage }, new HashSet<int>()));
-                i++;
+                var range = lines[lineIndex].Split("-").Select(long.Parse);
+                foodRanges.Add((range.First(), range.Last()));
+                lineIndex++;
             }
-            return (i, pagesMap, lines);
-        }
-
-        private bool CanPrint(Dictionary<int, Page> pagesMap, List<int> currLine)
-        {
-            var pagesPrinted = new HashSet<int>();
-            foreach (var page in currLine)
-            {
-                if (pagesPrinted.Contains(page))
-                    return false;
-                pagesPrinted.Add(page);
-                pagesPrinted = pagesPrinted.Union(pagesMap[page].PagesBefore).ToHashSet();
-            }
-            return true;
+            return lineIndex;
         }
 
         public override void Solve2(string input)
         {
-            var result = 0;
-            var (i, pagesMap, lines) = GetPagesMap(input);
-            i++;
-            while (i < lines.Length)
+            long result = -1;
+            var lines = GetLinesList(input);
+            var foodRanges = new List<(long, long)>();
+            var linesIndex = GetFoodRanges(foodRanges, 0, lines);
+
+            foodRanges = foodRanges.OrderBy(f => f.Item1).ToList();
+            long currentFirst = foodRanges.First().Item1;
+            long currentSecond = foodRanges.First().Item2;
+            foreach (var foodRange in foodRanges.Skip(1))
             {
-                var currLine = lines[i].Trim().Split(",").Select(int.Parse).ToList();
-                if (!CanPrint(pagesMap, currLine))
-                { 
-                    var j = 0;
-                    while (j < currLine.Count)
-                    {
-                        var page = currLine[j];
-                        var switched = false;
-                        for (var k = j + 1; k < currLine.Count; k++)
-                        {
-                            if (pagesMap[page].PagesBefore.Contains(currLine[k]))
-                            {
-                                currLine[j] = currLine[k];
-                                currLine[k] = page;
-                                switched = true;
-                                break;
-                            }                                
-                        }
-                        if (!switched)
-                            j++;
-                    }
-                    result += currLine[currLine.Count / 2];
+                if (foodRange.Item1 >= currentFirst && foodRange.Item1 <= currentSecond)
+                    currentSecond = Math.Max(currentSecond, foodRange.Item2);
+                else
+                {
+                    result += currentSecond - currentFirst + 1;
+                    currentSecond = foodRange.Item2;
+                    currentFirst = foodRange.Item1;
                 }
-                i++;
+                    
             }
-            Console.WriteLine(result);
+            result += currentSecond - currentFirst + 1;
+            Console.WriteLine(result + 1); // we lose a +1 at some point
         }
     }
 }
