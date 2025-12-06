@@ -36,6 +36,11 @@
             return input.Split("\n").Select(l => l.Trim().ToCharArray()).ToArray();
         }
 
+        public char[][] GetMatrixArrayNoTrim(string input)
+        {
+            return input.Split("\r\n").Select(l => l.ToCharArray()).ToArray();
+        }
+
         public int[][] GetMatrixIntArray(string input)
         {
             return input.Split("\n").Select(l => 
