@@ -1,4 +1,7 @@
-﻿namespace AdventOfCode2025.Tasks
+﻿using System.ComponentModel;
+using System.Linq.Expressions;
+
+namespace AdventOfCode2025.Tasks
 {
     public class Task7 : AdventTask
     {
@@ -7,65 +10,102 @@
             Filename += "7.txt";
         }
 
-        // Helper function for operations that need to be performed
-        private long Mutiply(long a, long b) => a * b;
-
-        private long Sum(long a, long b) => a + b;
-
-        private long Concatenate(long a, long b) => long.Parse(a.ToString() + b.ToString());
-
-
-        private long TryCombinations(long result, Stack<long> numbers, Func<long, long, long>[] operations)
+        private void TestPrint(char[][] map, HashSet<(int, int)> visited)
         {
-            // Check the stack if we have reached the end and gotten the result. 
-            // if we have reached the end and the result is not correct, then return 0
-            if (numbers.Count == 1 && numbers.Peek() == result)
-                return result;
-            if (numbers.Peek() > result || numbers.Count == 0 || numbers.Count == 1)
-                return 0;
-
-            // Get current result (at start first number, later partial result) and next number and perform operations on them
-            var currentResult = numbers.Pop();
-            var nextNumber = numbers.Pop();
-            foreach (var operation in operations)
+            for (var i = 0; i < map.Length; i++)
             {
-                numbers.Push(operation(currentResult, nextNumber));
-                var res = TryCombinations(result, numbers, operations);
-                if (res > 0)
-                    return res;
-                // Pop the intermediate result that was from the done operation
-                numbers.Pop();
+                for (var j = 0; j < map[0].Length; j++)
+                {
+                    var c = map[i][j];
+                    if (visited.Contains((i, j)))
+                        Console.Write("|");
+                    else
+                        Console.Write(c);
+                }
+                Console.WriteLine();
             }
-            // If the correct combination has not been found for these two numbers then push them back, 
-            // we will need them to try another operation to get the intermediate result.
-            numbers.Push(nextNumber);
-            numbers.Push(currentResult); 
-            return 0;
         }
-
-        private long SolveBoth(string input, Func<long, long, long>[] operations)
-        {
-            // Go over each line and try combinations of operations to find the right combination
-            // using a stack here so I can move the numbers on and off it dynamicaly.
-            long result = 0;
-            var lines = GetLinesList(input);
-            foreach (var line in lines)
-            {
-                var splitByColon = line.Split(":");
-                var testNumber = long.Parse(splitByColon[0]);
-                var numbers = splitByColon[1].Trim().Split(" ").Select(long.Parse).Reverse().ToList();
-                result += TryCombinations(testNumber, new Stack<long>(numbers), operations);
-            }
-            return result;
-        }
-        
         public override void Solve1(string input)
         {
-            Console.WriteLine(SolveBoth(input, [Mutiply, Sum]));
+            long result = 0;
+            var map = GetMatrixArray(input);
+            var queue = new Queue<(int row, int col)>();
+            for (var i = 0; i < map.Length; i++)
+            {
+                for (var j = 0; j < map[0].Length; j++)
+                {
+                    var c = map[i][j];
+                    if (c == 'S')
+                    {
+                        queue.Enqueue((i, j));
+                        break;
+                    }
+                }
+                if (queue.Count > 0)
+                    break;
+            }
+            var visited = new HashSet<(int row, int col)>();
+            while (queue.Count > 0)
+            {
+                var (row, col) = queue.Dequeue();
+                if (visited.Contains((row, col)) || CheckIfIndexOutsideMatrix(map, row, col))
+                    continue;
+                visited.Add((row, col));
+                if (!CheckIfIndexOutsideMatrix(map, row + 1, col))
+                {
+                    var next = map[row + 1][col];
+                    if (next == '^')
+                    {
+                        queue.Enqueue((row + 1, col + 1));
+                        queue.Enqueue((row + 1, col - 1));
+                        result++;
+                    }
+                    else if (next == '.')
+                        queue.Enqueue((row + 1, col));
+                }
+            }
+
+            //TestPrint(map, visited);
+            Console.WriteLine(result);
         }
         public override void Solve2(string input)
         {
-            Console.WriteLine(SolveBoth(input, [Mutiply, Sum, Concatenate]));
+            var map = GetMatrixArray(input);
+            var stack = new Stack<(int row, int col)>();
+            for (var i = 0; i < map.Length; i++)
+            {
+                for (var j = 0; j < map[0].Length; j++)
+                {
+                    var c = map[i][j];
+                    if (c == 'S')
+                    {
+                        Console.WriteLine(Explore(map, i, j, new Dictionary<(int, int), long>()));
+                        return;
+                    }
+                }
+                if (stack.Count > 0)
+                    break;
+            }
+        }
+
+        private long Explore(char[][] map, int row, int col, Dictionary<(int, int), long> visited)
+        {
+            if (CheckIfIndexOutsideMatrix(map, row, col) || CheckIfIndexOutsideMatrix(map, row + 1, col))
+                return 1;
+            if (visited.ContainsKey((row, col)))
+                return visited[(row, col)];
+            
+            var next = map[row + 1][col];
+            long paths = 0;
+            if (next == '^')
+            {
+                paths += Explore(map, row + 1, col + 1, visited);
+                paths += Explore(map, row + 1, col - 1, visited);
+            }
+            else if (next == '.')
+                paths += Explore(map, row + 1, col, visited);
+            visited[(row, col)] = paths;
+            return paths;
         }
     }
 }
