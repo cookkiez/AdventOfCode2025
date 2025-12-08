@@ -9,98 +9,79 @@
 
         public override void Solve1(string input)
         {
-            var (matrix, antennas) = GetMatrixAndAntennas(input);
-            var antinodes = GetAntinodes(matrix, antennas, false);
-            Console.WriteLine(antinodes.Count);
+            var lines = GetLinesList(input);
+            var distances = GetDistances(lines);
+            distances = distances.Take(1000).ToList();
+
+            var hashes = new List<HashSet<(long, long, long)>>();
+            var lastPair = CalculateConnectedBoxes(distances, hashes, lines.Count, false);
+            Console.WriteLine(hashes.Select(h => h.Count).OrderDescending().Take(3).Aggregate((a, b) => a * b));
         }
 
         public override void Solve2(string input)
         {
-            var (matrix, antennas) = GetMatrixAndAntennas(input);
-            var antinodes = GetAntinodes(matrix, antennas, true);
-            Console.WriteLine(antinodes.Count);
+            var lines = GetLinesList(input);
+            var distances = GetDistances(lines);
+
+            var lastPair = CalculateConnectedBoxes(distances, new List<HashSet<(long, long, long)>>(), lines.Count, true);
+            Console.WriteLine(lastPair.Item1.Item1 * lastPair.Item2.Item1);
         }
 
-        private HashSet<(int, int)> GetAntinodes(char[][] matrix, Dictionary<char, List<(int, int)>> antennas, bool part2)
+        private long Distance((long, long, long) a, (long, long, long) b)
+            => (long)Math.Sqrt(Math.Pow(a.Item1 - b.Item1, 2) + Math.Pow(a.Item2 - b.Item2, 2) + Math.Pow(a.Item3 - b.Item3, 2));
+
+        private IEnumerable<((long, long, long), (long, long, long), long)> GetDistances(List<string> lines)
         {
-            var visitedAntennas = new HashSet<((int, int), (int, int))>();
-            var antinodes = new HashSet<(int, int)>();
-
-            // Iterate over all antennas in the map, skipping the ones that appear only once
-            foreach (var (_, antennaList) in antennas)
+            var distances = new List<((long, long, long), (long, long, long), long)>();
+            for (int i = 0; i < lines.Count; i++)
             {
-                if (antennaList.Count < 2)
-                    continue;
-                foreach (var antenna in antennaList)
+                var line = lines[i].Split(",").Select(long.Parse).ToArray();
+                var first = (line[0], line[1], line[2]);
+                for (int j = i + 1; j < lines.Count; j++)
                 {
-                    foreach (var antenna2 in antennaList)
-                    {
-                        // If the antenna pair has already been visited, then don't examine it
-                        if (antenna == antenna2 || visitedAntennas.Contains((antenna, antenna2)) ||
-                            visitedAntennas.Contains((antenna2, antenna)))
-                            continue;
-
-                        // Get the delta for antenna pair to calculate antinodes from
-                        var (drow, dcol) = (antenna.Item1 - antenna2.Item1, antenna.Item2 - antenna2.Item2);
-                        visitedAntennas.Add((antenna, antenna2));
-                        
-                        // For part 1 we only need one antinode per pair, for part 2 we need all that fit in the grid. 
-                        if (part2)
-                        {
-                            IterateOverAntenna(antenna, drow, dcol, matrix, 1, antinodes);
-                            IterateOverAntenna(antenna2, drow, dcol, matrix, -1, antinodes);
-                        } else
-                        {
-                            ApplyDeltaAndCheckIfAntinodeInMap(antenna, drow, dcol, matrix, 1, antinodes);
-                            ApplyDeltaAndCheckIfAntinodeInMap(antenna2, drow, dcol, matrix, -1, antinodes);
-                        }
-
-                    }
+                    if (j == i)
+                        continue;
+                    var line2 = lines[j].Split(",").Select(long.Parse).ToArray();
+                    var second = (line2[0], line2[1], line2[2]);
+                    var dist = Distance(first, second);
+                    distances.Add((first, second, dist));
                 }
             }
-            return antinodes;
+            return distances.DistinctBy(d => (d.Item1, d.Item2)).OrderBy(d => d.Item3);
         }
 
-        private void IterateOverAntenna((int, int) antenna, int drow, int dcol, char[][] matrix, int multiplier, HashSet<(int, int)> antinodes) 
+        private ((long, long, long), (long, long, long)) CalculateConnectedBoxes(
+            IEnumerable<((long, long, long), (long, long, long), long)> distances, List<HashSet<(long, long, long)>> hashes, 
+            int numberOfBoxes, bool breakIfOneCircuit)
         {
-            // while the antenna/antinode is in the map, apply delta and generate new antinode 
-            antinodes.Add(antenna);
-            while (IsAntinodeInMatrix(antenna, matrix))
-                antenna = ApplyDeltaAndCheckIfAntinodeInMap(antenna, drow, dcol, matrix, multiplier, antinodes);
-        }
-
-        private (int, int) ApplyDeltaAndCheckIfAntinodeInMap((int, int) antenna, int drow, int dcol, char[][] matrix, int multiplier, HashSet<(int, int)> antinodes)
-        {
-            // Calculates the antinode based on the index and delta that are given to the function.
-            // If the new antinode is in the map, add it to the list of antinodes
-            var antinode = ApplyDelta(multiplier * drow, multiplier * dcol, antenna);
-            if (IsAntinodeInMatrix(antinode, matrix))
-                antinodes.Add(antinode);
-            return antinode;
-        }
-
-        private bool IsAntinodeInMatrix((int, int) antinode, char[][] matrix) => !CheckIfIndexOutsideMatrix<char>(matrix, antinode.Item1, antinode.Item2);
-
-        private (int, int) ApplyDelta(int drow, int dcol, (int, int) antenna) => (drow + antenna.Item1, dcol + antenna.Item2);
-
-        private (char[][], Dictionary<char, List<(int, int)>>) GetMatrixAndAntennas(string input)
-        {
-            var matrix = GetMatrixArray(input);
-            var antennas = new Dictionary<char, List<(int, int)>>();
-            for (var row = 0; row < matrix.Length; row++)
+            var lastPair = ((0L, 0L, 0L), (0L, 0L, 0L));
+            foreach (var dist in distances)
             {
-                for (var col = 0; col < matrix[row].Length; col++)
+                var first = hashes.FirstOrDefault(h => h.Contains(dist.Item1));
+                var second = hashes.FirstOrDefault(h => h.Contains(dist.Item2));
+                if (first == null && second == null)
                 {
-                    var currChar = matrix[row][col];
-                    if (currChar != '.')
-                    {
-                        if (!antennas.ContainsKey(currChar))
-                            antennas[currChar] = new List<(int, int)>();
-                        antennas[currChar].Add((row, col));
-                    }
+                    var hash = new HashSet<(long, long, long)> { dist.Item1, dist.Item2 };
+                    hashes.Add(hash);
                 }
+                else if (first != null && second == null)
+                {
+                    first.Add(dist.Item2);
+                }
+                else if (first == null && second != null)
+                {
+                    second.Add(dist.Item1);
+                }
+                else if (first != null && second != null && first != second)
+                {
+                    first.UnionWith(second);
+                    hashes.Remove(second);
+                }
+                lastPair = (dist.Item1, dist.Item2);
+                if (breakIfOneCircuit && hashes.Count == 1 && hashes.First().Count == numberOfBoxes)
+                    break;
             }
-            return (matrix, antennas);
+            return lastPair;
         }
     }
 }
